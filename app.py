@@ -1,60 +1,57 @@
 import os
 import json
 from PIL import Image
-
 import numpy as np
 import tensorflow as tf
 import streamlit as st
+import gdown  # to download from Google Drive
 
-
+# Working directory
 working_dir = os.path.dirname(os.path.abspath(__file__))
-model_path = f"{working_dir}/trained_model/plant_disease_prediction_model.h5"
-# Load the pre-trained model
+model_dir = f"{working_dir}/trained_model"
+model_path = f"{model_dir}/plant_disease_prediction_model.h5"
+
+# Google Drive file link (change this)
+MODEL_DRIVE_LINK = "https://drive.google.com/uc?id=YOUR_FILE_ID"
+
+# Download model if not found
+if not os.path.exists(model_path):
+    os.makedirs(model_dir, exist_ok=True)
+    with st.spinner("Downloading model, please wait..."):
+        gdown.download(MODEL_DRIVE_LINK, model_path, quiet=False)
+
+# Load the model
 model = tf.keras.models.load_model(model_path)
 
-# loading the class names
+# Load class indices
 class_indices = json.load(open(f"{working_dir}/class_indices.json"))
 
-
-# Function to Load and Preprocess the Image using Pillow
-def load_and_preprocess_image(image_path, target_size=(224, 224)):
-    # Load the image
-    img = Image.open(image_path)
-    # Resize the image
+def load_and_preprocess_image(image, target_size=(224, 224)):
+    img = Image.open(image)
     img = img.resize(target_size)
-    # Convert the image to a numpy array
-    img_array = np.array(img)
-    # Add batch dimension
+    img_array = np.array(img).astype('float32') / 255.0
     img_array = np.expand_dims(img_array, axis=0)
-    # Scale the image values to [0, 1]
-    img_array = img_array.astype('float32') / 255.
     return img_array
 
-
-# Function to Predict the Class of an Image
-def predict_image_class(model, image_path, class_indices):
-    preprocessed_img = load_and_preprocess_image(image_path)
+def predict_image_class(model, image, class_indices):
+    preprocessed_img = load_and_preprocess_image(image)
     predictions = model.predict(preprocessed_img)
     predicted_class_index = np.argmax(predictions, axis=1)[0]
-    predicted_class_name = class_indices[str(predicted_class_index)]
-    return predicted_class_name
+    return class_indices[str(predicted_class_index)]
 
-
-# Streamlit App
-st.title('Plant Disease Classifier')
+# Streamlit UI
+st.title("🌿 Plant Disease Classifier")
 
 uploaded_image = st.file_uploader("Upload an image...", type=["jpg", "jpeg", "png"])
 
-if uploaded_image is not None:
+if uploaded_image:
     image = Image.open(uploaded_image)
     col1, col2 = st.columns(2)
 
     with col1:
-        resized_img = image.resize((150, 150))
-        st.image(resized_img)
+        st.image(image.resize((150, 150)))
 
     with col2:
-        if st.button('Classify'):
-            # Preprocess the uploaded image and predict the class
+        if st.button("Classify"):
             prediction = predict_image_class(model, uploaded_image, class_indices)
-            st.success(f'Prediction: {str(prediction)}')
+            st.success(f"Prediction: {prediction}")
