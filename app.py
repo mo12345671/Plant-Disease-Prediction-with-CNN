@@ -4,54 +4,81 @@ from PIL import Image
 import numpy as np
 import tensorflow as tf
 import streamlit as st
-import gdown  # to download from Google Drive
 
-# Working directory
+# -------------------------------
+# 🧠 App Configuration
+# -------------------------------
+st.set_page_config(
+    page_title="🌿 Plant Disease Classifier",
+    page_icon="🌱",
+    layout="centered"
+)
+
+# -------------------------------
+# 📂 Paths
+# -------------------------------
 working_dir = os.path.dirname(os.path.abspath(__file__))
-model_dir = f"{working_dir}/trained_model"
-model_path = f"{model_dir}/plant_disease_prediction_model.h5"
+model_path = os.path.join(working_dir,  "plant_disease_prediction_model.h5")
+class_indices_path = os.path.join(data, "class_indices.json")
 
-# Google Drive file link (change this)
-MODEL_DRIVE_LINK = "https://drive.google.com/uc?id=YOUR_FILE_ID"
+# -------------------------------
+# ⚙️ Load Model and Classes
+# -------------------------------
+@st.cache_resource(show_spinner=True)
+def load_model_and_classes():
+    model = tf.keras.models.load_model(model_path)
+    with open(class_indices_path, "r") as f:
+        class_indices = json.load(f)
+    return model, class_indices
 
-# Download model if not found
-if not os.path.exists(model_path):
-    os.makedirs(model_dir, exist_ok=True)
-    with st.spinner("Downloading model, please wait..."):
-        gdown.download(MODEL_DRIVE_LINK, model_path, quiet=False)
+model, class_indices = load_model_and_classes()
 
-# Load the model
-model = tf.keras.models.load_model(model_path)
-
-# Load class indices
-class_indices = json.load(open(f"{working_dir}/class_indices.json"))
-
-def load_and_preprocess_image(image, target_size=(224, 224)):
-    img = Image.open(image)
+# -------------------------------
+# 🖼️ Image Preprocessing
+# -------------------------------
+def load_and_preprocess_image(image_file, target_size=(224, 224)):
+    img = Image.open(image_file).convert("RGB")
     img = img.resize(target_size)
-    img_array = np.array(img).astype('float32') / 255.0
+    img_array = np.array(img, dtype=np.float32) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
     return img_array
 
-def predict_image_class(model, image, class_indices):
-    preprocessed_img = load_and_preprocess_image(image)
-    predictions = model.predict(preprocessed_img)
-    predicted_class_index = np.argmax(predictions, axis=1)[0]
-    return class_indices[str(predicted_class_index)]
+# -------------------------------
+# 🔍 Prediction
+# -------------------------------
+def predict_image_class(image_file):
+    img_array = load_and_preprocess_image(image_file)
+    predictions = model.predict(img_array)
+    predicted_class_index = int(np.argmax(predictions, axis=1)[0])
+    predicted_class_name = class_indices[str(predicted_class_index)]
+    confidence = float(np.max(predictions)) * 100
+    return predicted_class_name, confidence
 
-# Streamlit UI
+# -------------------------------
+# 🎨 UI
+# -------------------------------
 st.title("🌿 Plant Disease Classifier")
+st.markdown(
+    """
+    Upload a leaf image 🌱 and let the model detect whether it's healthy or diseased.  
+    The model has been trained using a Convolutional Neural Network (CNN) for plant disease detection.
+    """
+)
 
-uploaded_image = st.file_uploader("Upload an image...", type=["jpg", "jpeg", "png"])
+uploaded_image = st.file_uploader("📸 Upload an image", type=["jpg", "jpeg", "png"])
 
-if uploaded_image:
+if uploaded_image is not None:
     image = Image.open(uploaded_image)
-    col1, col2 = st.columns(2)
+    st.image(image, caption="Uploaded Image", width=300)
 
-    with col1:
-        st.image(image.resize((150, 150)))
+    if st.button("🔍 Classify"):
+        with st.spinner("Analyzing the image... ⏳"):
+            predicted_class, confidence = predict_image_class(uploaded_image)
+        st.success(f"✅ **Prediction:** {predicted_class}")
+        st.info(f"🎯 **Confidence:** {confidence:.2f}%")
 
-    with col2:
-        if st.button("Classify"):
-            prediction = predict_image_class(model, uploaded_image, class_indices)
-            st.success(f"Prediction: {prediction}")
+# -------------------------------
+# 📘 Footer
+# -------------------------------
+st.markdown("---")
+st.caption("Developed with ❤️ using TensorFlow & Streamlit | © 2025 Plant Disease Detection Project")
