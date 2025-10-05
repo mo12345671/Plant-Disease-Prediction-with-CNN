@@ -15,40 +15,45 @@ st.set_page_config(
     layout="centered"
 )
 
-GOOGLE_DRIVE_ID = "1iY6LYkfADGUjlUkOblqQQJzX0VRN8Gi5"  # Your Google Drive model ID
+# Google Drive file/folder ID of your SavedModel
+# This should be a zip of the SavedModel folder uploaded to Drive
+GOOGLE_DRIVE_ID = "YOUR_SAVEDMODEL_ZIP_FILE_ID"
 MODEL_DIR = "trained_model"
-MODEL_PATH = os.path.join(MODEL_DIR, "plant_disease_model.h5")
+MODEL_ZIP_PATH = os.path.join(MODEL_DIR, "plant_disease_model_saved.zip")
+MODEL_FOLDER_PATH = os.path.join(MODEL_DIR, "plant_disease_model_saved")
 CLASS_JSON_PATH = os.path.join(MODEL_DIR, "class_indices.json")
 
 # -------------------------------------
-# 📦 DOWNLOAD MODEL USING GDOWN
+# 📦 DOWNLOAD & EXTRACT SAVEDMODEL
 # -------------------------------------
-def download_model_from_gdrive():
-    """Download the model from Google Drive if not already present."""
-    if os.path.exists(MODEL_PATH):
+def download_and_extract_model():
+    if os.path.exists(MODEL_FOLDER_PATH):
         st.success("✅ Model already exists — skipping download.")
         return
 
     os.makedirs(MODEL_DIR, exist_ok=True)
-    st.info("📥 Downloading model (~344 MB) from Google Drive... Please wait.")
+    st.info("📥 Downloading model from Google Drive...")
 
     url = f"https://drive.google.com/uc?id={GOOGLE_DRIVE_ID}"
-    gdown.download(url, MODEL_PATH, quiet=False)
+    gdown.download(url, MODEL_ZIP_PATH, quiet=False)
 
-    if os.path.exists(MODEL_PATH):
-        st.success("✅ Model downloaded successfully!")
+    if os.path.exists(MODEL_ZIP_PATH):
+        import zipfile
+        with zipfile.ZipFile(MODEL_ZIP_PATH, "r") as zip_ref:
+            zip_ref.extractall(MODEL_DIR)
+        st.success("✅ Model downloaded and extracted successfully!")
     else:
-        st.error("❌ Model download failed. Please check the Google Drive link.")
+        st.error("❌ Model download failed. Check your Google Drive link.")
 
 # -------------------------------------
-# 🧠 LOAD MODEL AND CLASS INDICES
+# 🧠 LOAD MODEL & CLASS INDICES
 # -------------------------------------
 @st.cache_resource
 def load_model_and_classes():
-    download_model_from_gdrive()
+    download_and_extract_model()
 
     st.info("🔄 Loading trained CNN model...")
-    model = tf.keras.models.load_model(MODEL_PATH)
+    model = tf.keras.models.load_model(MODEL_FOLDER_PATH)
 
     if os.path.exists(CLASS_JSON_PATH):
         with open(CLASS_JSON_PATH, "r") as f:
@@ -79,11 +84,7 @@ def predict_image_class(model, image, index_to_class):
     predicted_index = np.argmax(preds, axis=1)[0]
     confidence = np.max(preds) * 100
 
-    if str(predicted_index) in index_to_class:
-        predicted_label = index_to_class[str(predicted_index)]
-    else:
-        predicted_label = f"Class {predicted_index}"
-
+    predicted_label = index_to_class.get(str(predicted_index), f"Class {predicted_index}")
     return predicted_label, confidence
 
 # -------------------------------------
