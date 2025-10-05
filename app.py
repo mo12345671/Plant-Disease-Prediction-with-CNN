@@ -1,10 +1,10 @@
 import os
 import json
-import requests
 from PIL import Image
 import numpy as np
 import tensorflow as tf
 import streamlit as st
+import gdown  # Handles large Google Drive downloads safely
 
 # -------------------------------------
 # 🌿 CONFIGURATION
@@ -15,17 +15,16 @@ st.set_page_config(
     layout="centered"
 )
 
-GOOGLE_DRIVE_ID = "1iY6LYkfADGUjlUkOblqQQJzX0VRN8Gi5"  # your drive file ID
+GOOGLE_DRIVE_ID = "1iY6LYkfADGUjlUkOblqQQJzX0VRN8Gi5"  # Your Google Drive model ID
 MODEL_DIR = "trained_model"
 MODEL_PATH = os.path.join(MODEL_DIR, "plant_disease_model.h5")
 CLASS_JSON_PATH = os.path.join(MODEL_DIR, "class_indices.json")
 
-
 # -------------------------------------
-# 📦 DOWNLOAD MODEL SAFELY
+# 📦 DOWNLOAD MODEL USING GDOWN
 # -------------------------------------
 def download_model_from_gdrive():
-    """Download model from Google Drive if not found locally."""
+    """Download the model from Google Drive if not already present."""
     if os.path.exists(MODEL_PATH):
         st.success("✅ Model already exists — skipping download.")
         return
@@ -33,28 +32,16 @@ def download_model_from_gdrive():
     os.makedirs(MODEL_DIR, exist_ok=True)
     st.info("📥 Downloading model (~344 MB) from Google Drive... Please wait.")
 
-    url = f"https://drive.google.com/uc?id={GOOGLE_DRIVE_ID}&confirm=t"
-    response = requests.get(url, stream=True)
+    url = f"https://drive.google.com/uc?id={GOOGLE_DRIVE_ID}"
+    gdown.download(url, MODEL_PATH, quiet=False)
 
-    total_size = int(response.headers.get("content-length", 0))
-    block_size = 8192
-    downloaded = 0
-    progress_bar = st.progress(0)
-
-    with open(MODEL_PATH, "wb") as file:
-        for data in response.iter_content(block_size):
-            if data:
-                file.write(data)
-                if total_size > 0:  # ✅ avoid ZeroDivisionError
-                    downloaded += len(data)
-                    progress = min(downloaded / total_size, 1.0)
-                    progress_bar.progress(progress)
-
-    st.success("✅ Model downloaded successfully!")
-
+    if os.path.exists(MODEL_PATH):
+        st.success("✅ Model downloaded successfully!")
+    else:
+        st.error("❌ Model download failed. Please check the Google Drive link.")
 
 # -------------------------------------
-# 🧠 LOAD MODEL AND CLASSES
+# 🧠 LOAD MODEL AND CLASS INDICES
 # -------------------------------------
 @st.cache_resource
 def load_model_and_classes():
@@ -68,10 +55,10 @@ def load_model_and_classes():
             index_to_class = json.load(f)
     else:
         index_to_class = {}
+        st.warning("⚠️ class_indices.json not found. Labels may not display correctly.")
 
     st.success("✅ Model loaded successfully!")
     return model, index_to_class
-
 
 # -------------------------------------
 # 🧩 IMAGE PREPROCESSING
@@ -82,7 +69,6 @@ def load_and_preprocess_image(image, target_size=(224, 224)):
     img_array = np.array(img).astype("float32") / 255.0
     img_array = np.expand_dims(img_array, axis=0)
     return img_array
-
 
 # -------------------------------------
 # 🔍 PREDICTION FUNCTION
@@ -100,17 +86,16 @@ def predict_image_class(model, image, index_to_class):
 
     return predicted_label, confidence
 
-
 # -------------------------------------
 # 🌿 STREAMLIT UI
 # -------------------------------------
 st.title("🌿 Plant Disease Prediction App")
 st.markdown(
     "Upload a **leaf image** to identify plant diseases using a trained CNN model. "
-    "The model will be automatically downloaded if not found."
+    "The model will be downloaded automatically if not found."
 )
 
-# Load model and labels
+# Load model and class indices
 model, index_to_class = load_model_and_classes()
 
 uploaded_image = st.file_uploader("📸 Upload a leaf image", type=["jpg", "jpeg", "png"])
