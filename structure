@@ -1,0 +1,7 @@
+📁 plant-disease-app/
+ ┣ 📄 app.py
+ ┣ 📄 requirements.txt
+ ┣ 📄 class_indices.json
+ ┣ 📁 trained_model/
+ ┃ ┗ 📄 plant_disease_model.h5
+ ┗ 📄 README.md
